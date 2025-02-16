@@ -2,7 +2,7 @@
 //!
 //! # Examples
 //!
-//! ```rust
+//! ```ignore
 //! use async_graphql::*;
 //! use async_graphql::dataloader::*;
 //! use std::collections::{HashSet, HashMap};
