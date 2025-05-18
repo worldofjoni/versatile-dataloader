@@ -1,15 +1,22 @@
 [package]
-name = "dataloader"
+name = "async-dataloader"
 version = "0.1.0"
-edition = "2021"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+authors = ["sunli <scott_s829@163.com>", "Koxiaet"]
+categories = ["asynchronous", "caching"]
+description = "An async data loader for Rust."
+readme = "README.md"
+repository = "https://github.com/worldofjoni/async_dataloader"
+keywords = ["async", "dataloader", "cache"]
 
 [dependencies]
 fnv = "1.0.7"
 futures-channel = "0.3.31"
 futures-timer = "3.0.3"
 futures-util = "0.3.31"
-lru = "0.13.0"
-tokio = { version = "1.43.0", features = ["macros", "test-util"] }
+lru = "0.14.0"
+tokio = { version = "1.45.0", features = ["macros", "test-util"] }
 tracing = { version = "0.1.41", optional = true }
 
 

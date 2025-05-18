@@ -1,11 +1,14 @@
-# Dataloader
-Forked/extracted from [async-graphql](https://github.com/async-graphql/async-graphql) as it has no dependencies towards async-graphql and might be useful in other circumstances.
+# Async Dataloader
+A dataloader (originally developed by [facebook](https://github.com/graphql/dataloader)) allows to batch requests coming in at roughly the same time.
+This is useful e.g., to avoid the [n+1 problem](https://async-graphql.github.io/async-graphql/en/dataloader.html) in GraphQL.
+
+Forked/extracted from [async-graphql](https://github.com/async-graphql/async-graphql) as it has no dependencies towards async-graphql and might be useful on its own.
 
 ## Example
 TODO
 
 ## Related projects
-- [dataloader-rs](https://github.com/cksac/dataloader-rs)
+- [dataloader-rs](https://github.com/cksac/dataloader-rs) is similar, but it has a less versatile API that does not support errors.
 
 ## License
 
