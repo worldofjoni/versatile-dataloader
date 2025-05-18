@@ -36,6 +36,7 @@ assert_eq!(strings, vec![Some("1".to_string()), Some("2".to_string()), Some("3".
 ```
 
 ## Related projects
+- [async-graphql](https://github.com/async-graphql/async-graphql) includes a dataloder where this one is based on. We adapted the API to make the return type generic rather than an associated type. This allows to use one struct as a dataloader for different return types all with the same key (e.g., a UUID). 
 - [dataloader-rs](https://github.com/cksac/dataloader-rs) is similar, but it has a less versatile API that does not support errors.
 
 ## License
@@ -43,6 +44,6 @@ assert_eq!(strings, vec![Some("1".to_string()), Some("2".to_string()), Some("3".
 Licensed under either of
 
 - Apache License, Version 2.0,
-  ([LICENSE-APACHE](./LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
-- MIT license ([LICENSE-MIT](./LICENSE-MIT) or http://opensource.org/licenses/MIT)
+  ([LICENSE-APACHE](./LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](./LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
   at your option.
