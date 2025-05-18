@@ -1,4 +1,4 @@
-# Async Dataloader
+# Versatile Dataloader
 A dataloader (originally developed by [facebook](https://github.com/graphql/dataloader)) allows to batch requests coming in at roughly the same time.
 This is useful e.g., to avoid the [n+1 problem](https://async-graphql.github.io/async-graphql/en/dataloader.html) in GraphQL.
 
@@ -8,7 +8,7 @@ Forked/extracted from [async-graphql](https://github.com/async-graphql/async-gra
 ```rust
 use std::collections::{HashSet, HashMap};
 use std::convert::Infallible;
-use async_dataloader::{Loader, DataLoader};
+use versatile_dataloader::{Loader, DataLoader};
 
 /// This loader simply converts the integer key into a string value.
 struct MyLoader;

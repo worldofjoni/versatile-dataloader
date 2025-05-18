@@ -1,5 +1,5 @@
 [package]
-name = "async-dataloader"
+name = "versatile-dataloader"
 version = "0.1.0"
 edition = "2024"
 license = "MIT OR Apache-2.0"
@@ -7,7 +7,7 @@ authors = ["sunli <scott_s829@163.com>", "Koxiaet", "Jonatan Ziegler <jonatan@zi
 categories = ["asynchronous", "caching"]
 description = "An async data loader for Rust."
 readme = "README.md"
-repository = "https://github.com/worldofjoni/async_dataloader"
+repository = "https://github.com/worldofjoni/versatile-dataloader"
 keywords = ["async", "dataloader", "cache"]
 
 [dependencies]
