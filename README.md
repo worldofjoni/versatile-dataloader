@@ -5,7 +5,35 @@ This is useful e.g., to avoid the [n+1 problem](https://async-graphql.github.io/
 Forked/extracted from [async-graphql](https://github.com/async-graphql/async-graphql) as it has no dependencies towards async-graphql and might be useful on its own.
 
 ## Example
-TODO
+```rust
+use std::collections::{HashSet, HashMap};
+use std::convert::Infallible;
+use async_dataloader::{Loader, DataLoader};
+
+/// This loader simply converts the integer key into a string value.
+struct MyLoader;
+
+impl Loader<i32, String> for MyLoader {
+    type Error = Infallible;
+
+    async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, String>, Self::Error> {
+        // Implement database access or similar here.
+        Ok(keys.iter().copied().map(|n| (n, n.to_string())).collect())
+    }
+}
+
+
+tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(async {
+
+// Load data with dataloader:
+let loader = DataLoader::new(MyLoader, tokio::spawn);
+let strings = vec![loader.load_one(1).await.unwrap(), loader.load_one(2).await.unwrap(), loader.load_one(3).await.unwrap()];
+// The dataloader load function is only called once.
+
+assert_eq!(strings, vec![Some("1".to_string()), Some("2".to_string()), Some("3".to_string())]);
+
+});
+```
 
 ## Related projects
 - [dataloader-rs](https://github.com/cksac/dataloader-rs) is similar, but it has a less versatile API that does not support errors.

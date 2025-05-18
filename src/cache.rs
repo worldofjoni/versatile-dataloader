@@ -1,6 +1,6 @@
 use std::{
     borrow::Cow,
-    collections::{hash_map::RandomState, HashMap},
+    collections::{HashMap, hash_map::RandomState},
     hash::{BuildHasher, Hash},
     marker::PhantomData,
     num::NonZeroUsize,
@@ -17,7 +17,7 @@ pub trait CacheFactory: Send + Sync + 'static {
         V: Send + Sync + Clone + 'static;
 }
 
-/// Cache storage for [DataLoader](crate::dataloader::DataLoader).
+/// Cache storage for [`crate::DataLoader`].
 pub trait CacheStorage: Send + Sync + 'static {
     /// The key type of the record.
     type Key: Send + Sync + Clone + Eq + Hash + 'static;
@@ -91,13 +91,14 @@ where
     }
 }
 
-/// [std::collections::HashMap] cache.
+/// [`std::collections::HashMap`] cache.
 pub struct HashMapCache<S = RandomState> {
     _mark: PhantomData<S>,
 }
 
 impl<S: Send + Sync + BuildHasher + Default + 'static> HashMapCache<S> {
     /// Use specified `S: BuildHasher` to create a `HashMap` cache.
+    #[must_use]
     pub fn new() -> Self {
         Self { _mark: PhantomData }
     }
@@ -162,6 +163,7 @@ pub struct LruCache {
 
 impl LruCache {
     /// Creates a new LRU Cache that holds at most `cap` items.
+    #[must_use]
     pub fn new(cap: usize) -> Self {
         Self { cap }
     }

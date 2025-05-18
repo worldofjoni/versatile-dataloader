@@ -2,59 +2,38 @@
 //!
 //! # Examples
 //!
-//! ```ignore
-//! use async_graphql::*;
-//! use async_graphql::dataloader::*;
+//! ```
 //! use std::collections::{HashSet, HashMap};
 //! use std::convert::Infallible;
-//! use async_graphql::dataloader::Loader;
+//! use async_dataloader::{Loader, DataLoader};
 //!
 //! /// This loader simply converts the integer key into a string value.
 //! struct MyLoader;
 //!
-//! #[cfg_attr(feature = "boxed-trait", async_trait::async_trait)]
-//! impl Loader<i32> for MyLoader {
-//!     type Value = String;
+//! impl Loader<i32, String> for MyLoader {
 //!     type Error = Infallible;
 //!
-//!     async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, Self::Value>, Self::Error> {
-//!         // Use `MyLoader` to load data.
+//!     async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, String>, Self::Error> {
+//!         // Implement database access or similar here.
 //!         Ok(keys.iter().copied().map(|n| (n, n.to_string())).collect())
 //!     }
 //! }
 //!
-//! struct Query;
 //!
-//! #[Object]
-//! impl Query {
-//!     async fn value(&self, ctx: &Context<'_>, n: i32) -> Option<String> {
-//!         ctx.data_unchecked::<DataLoader<MyLoader>>().load_one(n).await.unwrap()
-//!     }
-//! }
+//! tokio::runtime::Builder::new_current_thread().build().unwrap().block_on(async {
 //!
-//! # tokio::runtime::Runtime::new().unwrap().block_on(async move {
-//! let schema = Schema::new(Query, EmptyMutation, EmptySubscription);
-//! let query = r#"
-//!     {
-//!         v1: value(n: 1)
-//!         v2: value(n: 2)
-//!         v3: value(n: 3)
-//!         v4: value(n: 4)
-//!         v5: value(n: 5)
-//!     }
-//! "#;
-//! let request = Request::new(query).data(DataLoader::new(MyLoader, tokio::spawn));
-//! let res = schema.execute(request).await.into_result().unwrap().data;
+//! // Load data with dataloader:
+//! let loader = DataLoader::new(MyLoader, tokio::spawn);
+//! let strings = vec![loader.load_one(1).await.unwrap(), loader.load_one(2).await.unwrap(), loader.load_one(3).await.unwrap()];
+//! // The dataloader load function is only called once.
 //!
-//! assert_eq!(res, value!({
-//!     "v1": "1",
-//!     "v2": "2",
-//!     "v3": "3",
-//!     "v4": "4",
-//!     "v5": "5",
-//! }));
-//! # });
+//! assert_eq!(strings, vec![Some("1".to_string()), Some("2".to_string()), Some("3".to_string())]);
+//!
+//! });
+//!
 //! ```
+#![warn(clippy::pedantic)]
+#![allow(clippy::missing_errors_doc, clippy::missing_panics_doc)]
 
 mod cache;
 
@@ -66,8 +45,8 @@ use std::{
     collections::{HashMap, HashSet},
     hash::Hash,
     sync::{
-        atomic::{AtomicBool, Ordering},
         Arc, Mutex,
+        atomic::{AtomicBool, Ordering},
     },
     time::Duration,
 };
@@ -78,17 +57,25 @@ use futures_channel::oneshot;
 use futures_timer::Delay;
 use futures_util::future::BoxFuture;
 #[cfg(feature = "tracing")]
-use tracing::{info_span, instrument, Instrument};
+use tracing::{Instrument, info_span, instrument};
 #[cfg(feature = "tracing")]
 use tracinglib as tracing;
 
 #[allow(clippy::type_complexity)]
-struct ResSender<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'static, T: Loader<K, V>> {
+struct ResSender<
+    K: Send + Sync + Hash + Eq + Clone + 'static,
+    V: Send + Sync + Clone + 'static,
+    T: Loader<K, V>,
+> {
     use_cache_values: HashMap<K, V>,
     tx: oneshot::Sender<Result<HashMap<K, V>, T::Error>>,
 }
 
-struct Requests<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'static, T: Loader<K, V>> {
+struct Requests<
+    K: Send + Sync + Hash + Eq + Clone + 'static,
+    V: Send + Sync + Clone + 'static,
+    T: Loader<K, V>,
+> {
     keys: HashSet<K>,
     pending: Vec<(HashSet<K>, ResSender<K, V, T>)>,
     cache_storage: Box<dyn CacheStorage<Key = K, Value = V>>,
@@ -97,10 +84,15 @@ struct Requests<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + C
 
 type KeysAndSender<K, V, T> = (HashSet<K>, Vec<(HashSet<K>, ResSender<K, V, T>)>);
 
-impl<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'static, T: Loader<K, V>> Requests<K, V, T> {
+impl<
+    K: Send + Sync + Hash + Eq + Clone + 'static,
+    V: Send + Sync + Clone + 'static,
+    T: Loader<K, V>,
+> Requests<K, V, T>
+{
     fn new<C: CacheFactory>(cache_factory: &C) -> Self {
         Self {
-            keys: Default::default(),
+            keys: HashSet::default(),
             pending: Vec::new(),
             cache_storage: cache_factory.create::<K, V>(),
             disable_cache: false,
@@ -117,7 +109,9 @@ impl<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'sta
 
 /// Trait for batch loading.
 #[cfg_attr(feature = "boxed-trait", async_trait::async_trait)]
-pub trait Loader<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'static>: Send + Sync + 'static {
+pub trait Loader<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'static>:
+    Send + Sync + 'static
+{
     /// Type of error.
     type Error: Send + Clone + 'static;
 
@@ -127,10 +121,7 @@ pub trait Loader<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + 
 
     /// Load the data set specified by the `keys`.
     #[cfg(not(feature = "boxed-trait"))]
-    fn load(
-        &self,
-        keys: &[K],
-    ) -> impl Future<Output = Result<HashMap<K, V>, Self::Error>> + Send;
+    fn load(&self, keys: &[K]) -> impl Future<Output = Result<HashMap<K, V>, Self::Error>> + Send;
 }
 
 struct DataLoaderInner<T> {
@@ -144,7 +135,7 @@ impl<T> DataLoaderInner<T> {
     where
         K: Send + Sync + Hash + Eq + Clone + 'static,
         V: Send + Sync + Clone + 'static,
-        T: Loader<K, V>
+        T: Loader<K, V>,
     {
         let tid = TypeId::of::<K>();
         let keys = keys.into_iter().collect::<Vec<_>>();
@@ -199,14 +190,14 @@ pub struct DataLoader<T, C = NoCache> {
 }
 
 impl<T> DataLoader<T, NoCache> {
-    /// Use `Loader` to create a [DataLoader] that does not cache records.
+    /// Use `Loader` to create a [`DataLoader`] that does not cache records.
     pub fn new<S, R>(loader: T, spawner: S) -> Self
     where
         S: Fn(BoxFuture<'static, ()>) -> R + Send + Sync + 'static,
     {
         Self {
             inner: Arc::new(DataLoaderInner {
-                requests: Mutex::new(Default::default()),
+                requests: Mutex::new(HashMap::default()),
                 loader,
             }),
             cache_factory: NoCache,
@@ -221,14 +212,14 @@ impl<T> DataLoader<T, NoCache> {
 }
 
 impl<T, C: CacheFactory> DataLoader<T, C> {
-    /// Use `Loader` to create a [DataLoader] with a cache factory.
+    /// Use `Loader` to create a [`DataLoader`] with a cache factory.
     pub fn with_cache<S, R>(loader: T, spawner: S, cache_factory: C) -> Self
     where
         S: Fn(BoxFuture<'static, ()>) -> R + Send + Sync + 'static,
     {
         Self {
             inner: Arc::new(DataLoaderInner {
-                requests: Mutex::new(Default::default()),
+                requests: Mutex::new(HashMap::default()),
                 loader,
             }),
             cache_factory,
@@ -309,7 +300,11 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
         V: Send + Sync + Clone + 'static,
         T: Loader<K, V>,
     {
-        enum Action<K: Send + Sync + Hash + Eq + Clone + 'static, V: Send + Sync + Clone + 'static, T: Loader<K, V>> {
+        enum Action<
+            K: Send + Sync + Hash + Eq + Clone + 'static,
+            V: Send + Sync + Clone + 'static,
+            T: Loader<K, V>,
+        > {
             ImmediateLoad(KeysAndSender<K, V, T>),
             StartFetch,
             Delay,
@@ -344,7 +339,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
             if !use_cache_values.is_empty() && keys_set.is_empty() {
                 return Ok(use_cache_values);
             } else if use_cache_values.is_empty() && keys_set.is_empty() {
-                return Ok(Default::default());
+                return Ok(HashMap::default());
             }
 
             typed_requests.keys.extend(keys_set.clone());
@@ -402,12 +397,12 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
                     };
 
                     if !keys.0.is_empty() {
-                        inner.do_load(disable_cache, keys).await
+                        inner.do_load(disable_cache, keys).await;
                     }
                 };
                 #[cfg(feature = "tracing")]
                 let task = task.instrument(info_span!("start_fetch")).in_current_span();
-                (self.spawner)(Box::pin(task))
+                (self.spawner)(Box::pin(task));
             }
             Action::Delay => {}
         }
@@ -417,9 +412,10 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
 
     /// Feed some data into the cache.
     ///
-    /// **NOTE: If the cache type is [NoCache], this function will not take
+    /// **NOTE: If the cache type is [`NoCache`], this function will not take
     /// effect. **
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
+    #[allow(clippy::unused_async)]
     pub async fn feed_many<K, V, I>(&self, values: I)
     where
         K: Send + Sync + Hash + Eq + Clone + 'static,
@@ -443,7 +439,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
 
     /// Feed some data into the cache.
     ///
-    /// **NOTE: If the cache type is [NoCache], this function will not take
+    /// **NOTE: If the cache type is [`NoCache`], this function will not take
     /// effect. **
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
     pub async fn feed_one<K, V>(&self, key: K, value: V)
@@ -457,7 +453,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
 
     /// Clears the cache.
     ///
-    /// **NOTE: If the cache type is [NoCache], this function will not take
+    /// **NOTE: If the cache type is [`NoCache`], this function will not take
     /// effect. **
     #[cfg_attr(feature = "tracing", instrument(skip_all))]
     pub fn clear<K, V>(&self)
@@ -581,7 +577,13 @@ mod tests {
     #[tokio::test]
     async fn test_dataloader_load_empty() {
         let loader = DataLoader::new(MyLoader, tokio::spawn);
-        assert!(loader.load_many::<i32, _, _>(vec![]).await.unwrap().is_empty());
+        assert!(
+            loader
+                .load_many::<i32, _, _>(vec![])
+                .await
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[tokio::test]
