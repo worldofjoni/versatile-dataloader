@@ -104,7 +104,7 @@ impl<T> DataLoaderInner<T> {
         V: Send + Sync + Clone + 'static,
         T: Loader<K, V>,
     {
-        let tid = TypeId::of::<K>();
+        let tid = TypeId::of::<(K, V)>();
         let keys = keys.into_iter().collect::<Vec<_>>();
 
         match self.loader.load(&keys).await {
@@ -236,7 +236,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
         V: Send + Sync + Clone + 'static,
         T: Loader<K, V>,
     {
-        let tid = TypeId::of::<K>();
+        let tid = TypeId::of::<(K, V)>();
         let mut requests = self.inner.requests.lock().unwrap();
         let typed_requests = requests
             .get_mut(&tid)
@@ -277,7 +277,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
             Delay,
         }
 
-        let tid = TypeId::of::<K>();
+        let tid = TypeId::of::<(K, V)>();
 
         let (action, rx) = {
             let mut requests = self.inner.requests.lock().unwrap();
@@ -390,7 +390,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
         V: Send + Sync + Clone + 'static,
         T: Loader<K, V>,
     {
-        let tid = TypeId::of::<K>();
+        let tid = TypeId::of::<(K, V)>();
         let mut requests = self.inner.requests.lock().unwrap();
         let typed_requests = requests
             .entry(tid)
@@ -429,7 +429,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
         V: Send + Sync + Clone + 'static,
         T: Loader<K, V>,
     {
-        let tid = TypeId::of::<K>();
+        let tid = TypeId::of::<(K, V)>();
         let mut requests = self.inner.requests.lock().unwrap();
         let typed_requests = requests
             .entry(tid)
@@ -446,7 +446,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
         V: Send + Sync + Clone + 'static,
         T: Loader<K, V>,
     {
-        let tid = TypeId::of::<K>();
+        let tid = TypeId::of::<(K, V)>();
         let requests = self.inner.requests.lock().unwrap();
         match requests.get(&tid) {
             None => HashMap::new(),
@@ -465,6 +465,7 @@ impl<T, C: CacheFactory> DataLoader<T, C> {
 #[cfg(test)]
 mod tests {
     use fnv::FnvBuildHasher;
+    use tokio::join;
 
     use super::*;
 
@@ -687,5 +688,40 @@ mod tests {
         tokio::time::sleep(Duration::from_millis(500)).await;
         handle.abort();
         loader.load_many(vec![4, 5, 6]).await.unwrap();
+    }
+
+    #[tokio::test]
+    async fn test_load_different_keys() {
+        struct MyDelayLoader;
+        #[cfg_attr(feature = "boxed-trait", async_trait::async_trait)]
+        impl Loader<i32, i32> for MyDelayLoader {
+            type Error = ();
+
+            async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, i32>, Self::Error> {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                Ok(keys.iter().copied().map(|k| (k, k)).collect())
+            }
+        }
+        #[cfg_attr(feature = "boxed-trait", async_trait::async_trait)]
+        impl Loader<i32, u32> for MyDelayLoader {
+            type Error = ();
+
+            async fn load(&self, keys: &[i32]) -> Result<HashMap<i32, u32>, Self::Error> {
+                tokio::time::sleep(Duration::from_secs(1)).await;
+                Ok(keys
+                    .iter()
+                    .copied()
+                    .map(|k| (k, k.try_into().unwrap()))
+                    .collect())
+            }
+        }
+
+        let loader = DataLoader::new(MyDelayLoader, tokio::spawn).delay(Duration::from_secs(1));
+
+        let x = join!(loader.load_one(1), loader.load_one(1));
+        let x1: u32 = x.0.unwrap().unwrap();
+        let x2: i32 = x.1.unwrap().unwrap();
+        assert_eq!(x2, 1i32);
+        assert_eq!(x1, 1u32);
     }
 }
